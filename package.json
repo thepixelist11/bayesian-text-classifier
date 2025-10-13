@@ -1,0 +1,17 @@
+{
+    "name": "bayesian-text-classifier",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "build": "tsc",
+        "dev": "concurrently --names \"tsc,node\" -c \"auto\" --pad-prefix  \"tsc -w\" \"node --watch ./bin/main.js\""
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "module",
+    "devDependencies": {
+        "@types/node": "^24.3.1"
+    }
+}

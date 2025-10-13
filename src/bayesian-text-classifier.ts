@@ -1,0 +1,254 @@
+import fs from "fs";
+import path from "path";
+import * as url from "url";
+import { getWords } from "./utils.js";
+import workers from "worker_threads";
+
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+
+export function getStopwordsFromFile(pth: string) {
+    const file = fs.readFileSync(path.resolve(pth), { encoding: "utf8" }).toLowerCase();
+    const stopwords = file.split(/\W+/gi);
+    const stopwordSet = new Set(stopwords);
+    return stopwordSet;
+}
+
+export function softmax(val: number, vals: number[]) {
+    const sum = vals.reduce((prev, curr) => prev + Math.exp(curr), 0);
+    return Math.exp(val) / sum;
+}
+
+export function getMostLikely(scores: { [key: string]: number }) {
+    let max_val = -Infinity;
+    let max_key = "";
+    for (const key in scores) {
+        if (scores[key] > max_val) {
+            max_val = scores[key];
+            max_key = key;
+        }
+    }
+
+    return max_key;
+}
+
+class ClassifierCategory {
+    words: { [key: string]: number } = {};
+    total_word_count: number = 0;
+    document_count: number = 0;
+    word_likelihoods: { [word: string]: number } = {};
+    prior_probability: number = 0;
+};
+type ClassifierCategoryMap = { [key: string]: ClassifierCategory };
+
+type ClassifierCategoryCounts = {
+    document_count: number;
+    total_word_count: number;
+    words: Record<string, number>;
+}
+type LocalCategoryMap = Record<string, ClassifierCategoryCounts>;
+
+export class Classifier {
+    private category_names: Set<string> = new Set();
+    private categories: ClassifierCategoryMap = {};
+    private total_document_count: number = 0;
+    private vocabulary: Set<string> = new Set();
+    private alpha: number = 1.0;
+    public finalized: boolean = false;
+
+    constructor(private stopwords: Set<string> = new Set()) { };
+
+    private mergeLocalCounts(local: LocalCategoryMap) {
+        for (const [category, localCat] of Object.entries(local)) {
+            if (!this.categories[category]) {
+                this.categories[category] = new ClassifierCategory();
+                this.category_names.add(category);
+            }
+
+            const globalCat = this.categories[category];
+
+            globalCat.document_count += localCat.document_count;
+            globalCat.total_word_count += localCat.total_word_count;
+            this.total_document_count += localCat.document_count;
+
+            for (const [word, count] of Object.entries(localCat.words)) {
+                globalCat.words[word] = (globalCat.words[word] || 0) + count;
+                this.vocabulary.add(word);
+            }
+        }
+    }
+
+    trainText(doc: string, category: string) {
+        this.finalized = false;
+
+        const words = getWords(doc, this.stopwords);
+        this.category_names.add(category);
+
+        if (!this.categories[category])
+            this.categories[category] = new ClassifierCategory();
+
+        const cat = this.categories[category];
+
+        this.total_document_count++;
+        cat.document_count++;
+
+        for (const word of words) {
+            this.vocabulary.add(word);
+            cat.total_word_count++;
+
+            if (!cat.words[word])
+                cat.words[word] = 1;
+            else
+                cat.words[word]++;
+        }
+    }
+
+    public finalizeTraining() {
+        for (const cat_name of this.category_names) {
+            const cat = this.categories[cat_name];
+            cat.prior_probability = cat.document_count / this.total_document_count;
+
+            for (const word in cat.words) {
+                cat.word_likelihoods[word] =
+                    (cat.words[word] + this.alpha) /
+                    (cat.total_word_count + this.alpha * this.vocabulary.size);
+            }
+        }
+
+        this.finalized = true;
+    }
+
+    trainFile(pth: string, category: string) {
+        if (!fs.statSync(path.resolve(pth)).isFile())
+            throw new Error(`${path.resolve(pth)} is not a file.`);
+
+        const doc = fs.readFileSync(path.resolve(pth), { encoding: "utf8" });
+
+        this.trainText(doc, category);
+    }
+
+    trainDir(pth: string, count_files = true) {
+        if (!fs.statSync(path.resolve(pth)).isDirectory())
+            throw new Error(`${path.resolve(pth)} is not a directory.`);
+
+        const category_names = fs.readdirSync(path.resolve(pth), { encoding: "utf8" });
+
+        const category_paths = category_names
+            .map(name => path.join(path.resolve(pth), name))
+            .filter(cat_path => fs.statSync(cat_path).isDirectory());
+
+        let total_files = 0;
+        let total_files_done = 0;
+        if (count_files)
+            total_files = fs.readdirSync(path.resolve(pth), { encoding: "utf8", recursive: true })
+                .filter(file => fs.statSync(path.join(path.resolve(pth), file)).isFile()).length;
+
+        for (let i = 0; i < category_names.length; i++) {
+            const cat_name = category_names[i];
+            const cat_path = category_paths[i];
+
+            if (count_files)
+                console.log(`Training: ${cat_name}`);
+
+            const doc_paths = fs.readdirSync(cat_path, { encoding: "utf8" })
+                .map(name => path.join(path.resolve(cat_path), name))
+                .filter(doc_path => fs.statSync(doc_path).isFile());
+
+            let doc_index = 0;
+            for (const doc of doc_paths) {
+                this.trainFile(doc, cat_name);
+                if (count_files)
+                    process.stdout.write(`\r${++doc_index} / ${doc_paths.length} - ${++total_files_done} / ${total_files}`);
+            }
+
+            if (count_files)
+                process.stdout.write("\n");
+        }
+
+        this.finalizeTraining();
+    }
+
+    async trainDirParallel(pth: string) {
+        const is_category_dir: { [key: string]: boolean } = {};
+
+        const categories = fs.readdirSync(pth).filter(name =>
+            fs.statSync(path.join(pth, name)).isDirectory() ||
+            fs.statSync(path.join(pth, name)).isFile()
+        );
+
+        for (const cat of categories) {
+            is_category_dir[cat] = fs.statSync(path.join(pth, cat)).isDirectory();
+        }
+
+        const workerPromises = categories.map(cat_name => {
+            const cat_path = path.join(pth, cat_name);
+            let docs: string[] = [];
+
+            if (is_category_dir[cat_name])
+                docs = fs.readdirSync(cat_path)
+                    .map(f => fs.readFileSync(path.join(cat_path, f), { encoding: "utf8" }));
+            else
+                docs = fs.readFileSync(cat_path, { encoding: "utf8" }).split("\n");
+
+            return new Promise((res, rej) => {
+                const worker = new workers.Worker(path.join(__dirname, "worker.js"), {
+                    workerData: {
+                        docs,
+                        category: cat_name,
+                        stopwords: Array.from(this.stopwords)
+                    }
+                });
+
+                worker.on("message", (local: any) => res(local));
+                worker.on("error", rej);
+                worker.on("exit", code => {
+                    if (code !== 0)
+                        rej(new Error(`Worker stopped with exit code ${code}`));
+                });
+            }) as Promise<LocalCategoryMap>;
+        });
+
+        const locals = await Promise.all(workerPromises);
+        for (const local of locals)
+            this.mergeLocalCounts(local);
+
+        this.finalizeTraining();
+    }
+
+    classify(doc: string, output_fn?: ((val: number, val_arr: number[]) => number)) {
+        if (!this.vocabulary.size || !this.total_document_count || !this.finalized) {
+            throw new Error("Model not yet trained and finalized.");
+        }
+
+        const words = getWords(doc, this.stopwords);
+        const scores: { [key: string]: number } = {};
+
+        for (const cat_name of this.category_names) {
+            const cat = this.categories[cat_name];
+
+            scores[cat_name] = Math.log(cat.prior_probability);
+
+            for (const word of words) {
+                let likelihood: number;
+
+                if (cat.words[word]) {
+                    likelihood = cat.word_likelihoods[word];
+                } else {
+                    likelihood = (this.alpha) /
+                        (cat.total_word_count + this.alpha * this.vocabulary.size);
+                }
+
+                scores[cat_name] += Math.log(likelihood);
+            }
+        }
+
+        if (!output_fn)
+            return scores;
+
+        let modified_scores: { [key: string]: number } = {};
+        for (const cat_name in scores) {
+            modified_scores[cat_name] = output_fn(scores[cat_name], [...Object.values(scores)]);
+        }
+
+        return modified_scores;
+    }
+}
