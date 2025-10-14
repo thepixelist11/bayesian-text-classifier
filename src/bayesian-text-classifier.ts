@@ -126,48 +126,7 @@ export class Classifier {
         this.trainText(doc, category);
     }
 
-    trainDir(pth: string, count_files = true) {
-        if (!fs.statSync(path.resolve(pth)).isDirectory())
-            throw new Error(`${path.resolve(pth)} is not a directory.`);
-
-        const category_names = fs.readdirSync(path.resolve(pth), { encoding: "utf8" });
-
-        const category_paths = category_names
-            .map(name => path.join(path.resolve(pth), name))
-            .filter(cat_path => fs.statSync(cat_path).isDirectory());
-
-        let total_files = 0;
-        let total_files_done = 0;
-        if (count_files)
-            total_files = fs.readdirSync(path.resolve(pth), { encoding: "utf8", recursive: true })
-                .filter(file => fs.statSync(path.join(path.resolve(pth), file)).isFile()).length;
-
-        for (let i = 0; i < category_names.length; i++) {
-            const cat_name = category_names[i];
-            const cat_path = category_paths[i];
-
-            if (count_files)
-                console.log(`Training: ${cat_name}`);
-
-            const doc_paths = fs.readdirSync(cat_path, { encoding: "utf8" })
-                .map(name => path.join(path.resolve(cat_path), name))
-                .filter(doc_path => fs.statSync(doc_path).isFile());
-
-            let doc_index = 0;
-            for (const doc of doc_paths) {
-                this.trainFile(doc, cat_name);
-                if (count_files)
-                    process.stdout.write(`\r${++doc_index} / ${doc_paths.length} - ${++total_files_done} / ${total_files}`);
-            }
-
-            if (count_files)
-                process.stdout.write("\n");
-        }
-
-        this.finalizeTraining();
-    }
-
-    async trainDirParallel(pth: string) {
+    async trainDir(pth: string) {
         const is_category_dir: { [key: string]: boolean } = {};
 
         const categories = fs.readdirSync(pth).filter(name =>

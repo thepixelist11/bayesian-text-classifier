@@ -1,17 +1,33 @@
 {
     "name": "bayesian-text-classifier",
     "version": "1.0.0",
-    "description": "",
-    "main": "index.js",
+    "description": "A multithreaded naive Bayesian text classifier written in TypeScript",
+    "homepage": "https://github.com/thepixelist11/bayesian-text-classifier",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/thepixelist11/bayesian-text-classifier"
+    },
+    "bugs": {
+        "url": "https://github.com/thepixelist11/bayesian-text-classifier/issues"
+    },
     "scripts": {
         "build": "tsc",
         "dev": "concurrently --names \"tsc,node\" -c \"auto\" --pad-prefix  \"tsc -w\" \"node --watch ./bin/main.js\""
     },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
+    "keywords": [
+        "bayesian",
+        "classification",
+        "nlp",
+        "ml",
+        "machine learning",
+        "probability"
+    ],
+    "author": "thepixelist",
+    "license": "MIT",
     "type": "module",
     "devDependencies": {
         "@types/node": "^24.3.1"
-    }
+    },
+    "main": "bin/bayesian-text-classifier.js",
+    "module": "bin/bayesian-text-classifier.js"
 }
