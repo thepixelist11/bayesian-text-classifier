@@ -12,7 +12,7 @@ gains on multicore systems.
 ## Features
 
 - **Naive Bayes text classification** with Laplace (add-one) smoothing
-- **Multithreaded training** (`trainDirParallel`) for improved scalability
+- **Multithreaded training** for improved scalability
 - **Support for arbitrary categories** and document-based datasets
 - **Automatic vocabulary management**
 - **Stopword filtering** from file
