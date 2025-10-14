@@ -14,6 +14,7 @@ gains on multicore systems.
 - **Naive Bayes text classification** with Laplace (add-one) smoothing
 - **Multithreaded training** for improved scalability
 - **Support for arbitrary categories** and document-based datasets
+- **Higher Order** for improved flexibility and increased accuracy for large datasets
 - **Automatic vocabulary management**
 - **Stopword filtering** from file
 - **Softmax scoring** and maximum likelihood classification utilities
@@ -50,7 +51,7 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 const main = async () => {
     const stopwords = btc.getStopwordsFromFile(path.join(__dirname, "english-stopwords"));
-    const classifier_stars = new btc.Classifier(stopwords);
+    const classifier_stars = new btc.Classifier(stopwords, 2); // Using bigrams (depth 2) for stars
     const classifier_category = new btc.Classifier(stopwords);
 
     await classifier_stars.trainDirParallel(path.join(__dirname, "../data/amazon-reviews-stars"));
@@ -152,10 +153,17 @@ Returns the label corresponding to the highest score in a given score map.
 
 ---
 
-### `new Classifier(stopwords?: Set<string>)`
+### `new Classifier(stopwords?: Set<string>, depth?: number, alpha?: number)`
 
 Constructs a new Naive Bayesian classifier instance.
 The optional `stopwords` set is used to exclude frequent, non-informative terms.
+The optional `depth` (defaults to 1) is used to set the depth or order of the
+classifier. Higher depth's increase training time with the potential of
+increasing accuracy by allowing for multi-word contexts. Note: See [The Curse of Dimensionality](https://en.wikipedia.org/wiki/Curse_of_dimensionality).
+Experiment with different depths to see what works best for your use case.
+The optional `alpha` (defaults to 1) defines the alpha for additive Laplace
+smoothing to smooth count data, especially for terms the classifier hasn't
+been trained on.
 
 ---
 
@@ -195,7 +203,7 @@ This method is automatically invoked after `trainDir()` or
 
 ## Implementation Notes
 
-- Uses **Laplace smoothing** (α = 1.0) to prevent zero-probability words.
+- Uses **Laplace smoothing** (α defaults to 1.0) to prevent zero-probability words.
 - Maintains an explicit vocabulary to ensure consistent probability computation.
 - Stopwords are ignored during tokenization to improve classification accuracy.
 - The classifier expects **UTF-8 encoded** text files. Support for additional formats will be implemented in the future.

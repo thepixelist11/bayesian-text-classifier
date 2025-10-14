@@ -52,26 +52,25 @@ export class Classifier {
     private categories: ClassifierCategoryMap = {};
     private total_document_count: number = 0;
     private vocabulary: Set<string> = new Set();
-    private alpha: number = 1.0;
     public finalized: boolean = false;
 
-    constructor(private stopwords: Set<string> = new Set()) { };
+    constructor(private stopwords: Set<string> = new Set(), private depth: number = 1, public alpha: number = 1.0) { };
 
     private mergeLocalCounts(local: LocalCategoryMap) {
-        for (const [category, localCat] of Object.entries(local)) {
+        for (const [category, local_cat] of Object.entries(local)) {
             if (!this.categories[category]) {
                 this.categories[category] = new ClassifierCategory();
                 this.category_names.add(category);
             }
 
-            const globalCat = this.categories[category];
+            const global_cat = this.categories[category];
 
-            globalCat.document_count += localCat.document_count;
-            globalCat.total_word_count += localCat.total_word_count;
-            this.total_document_count += localCat.document_count;
+            global_cat.document_count += local_cat.document_count;
+            global_cat.total_word_count += local_cat.total_word_count;
+            this.total_document_count += local_cat.document_count;
 
-            for (const [word, count] of Object.entries(localCat.words)) {
-                globalCat.words[word] = (globalCat.words[word] || 0) + count;
+            for (const [word, count] of Object.entries(local_cat.words)) {
+                global_cat.words[word] = (global_cat.words[word] || 0) + count;
                 this.vocabulary.add(word);
             }
         }
@@ -81,6 +80,7 @@ export class Classifier {
         this.finalized = false;
 
         const words = getWords(doc, this.stopwords);
+
         this.category_names.add(category);
 
         if (!this.categories[category])
@@ -91,14 +91,20 @@ export class Classifier {
         this.total_document_count++;
         cat.document_count++;
 
-        for (const word of words) {
-            this.vocabulary.add(word);
-            cat.total_word_count++;
+        for (let order = 0; order < this.depth; order++) {
+            for (let i = 0; i < words.length; i++) {
+                let word = words[i];
 
-            if (!cat.words[word])
-                cat.words[word] = 1;
-            else
-                cat.words[word]++;
+                for (let n = 1; n <= order; n++) {
+                    if (!words[i + n]) break;
+                    word += ` ${words[i + n]}`;
+                }
+
+                this.vocabulary.add(word);
+
+                cat.words[word] = (cat.words[word] || 0) + 1;
+                cat.total_word_count++;
+            }
         }
     }
 
@@ -153,7 +159,8 @@ export class Classifier {
                     workerData: {
                         docs,
                         category: cat_name,
-                        stopwords: Array.from(this.stopwords)
+                        stopwords: Array.from(this.stopwords),
+                        depth: this.depth,
                     }
                 });
 
@@ -186,17 +193,25 @@ export class Classifier {
 
             scores[cat_name] = Math.log(cat.prior_probability);
 
-            for (const word of words) {
-                let likelihood: number;
+            for (let order = 0; order < this.depth; order++) {
+                for (let i = 0; i < words.length; i++) {
+                    let likelihood: number;
+                    let word = words[i];
 
-                if (cat.words[word]) {
-                    likelihood = cat.word_likelihoods[word];
-                } else {
-                    likelihood = (this.alpha) /
-                        (cat.total_word_count + this.alpha * this.vocabulary.size);
+                    for (let n = 1; n <= order; n++) {
+                        if (!words[i + n]) break;
+                        word += ` ${words[i + n]}`;
+                    }
+
+                    if (cat.words[word]) {
+                        likelihood = cat.word_likelihoods[word];
+                    } else {
+                        likelihood = (this.alpha) /
+                            (cat.total_word_count + this.alpha * this.vocabulary.size);
+                    }
+
+                    scores[cat_name] += Math.log(likelihood);
                 }
-
-                scores[cat_name] += Math.log(likelihood);
             }
         }
 
