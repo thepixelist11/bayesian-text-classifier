@@ -36,10 +36,6 @@ Ensure that your NodeJS version supports ES modules and `worker_threads` (Node â
 
 ---
 
-## Roadmap
-
----
-
 ## Basic Usage
 
 Below is an example of how the classifier may be used in a NodeJS environment
