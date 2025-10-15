@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import * as url from "url";
 import { getWords } from "./utils.js";
-import workers from "worker_threads";
+import workers, { workerData } from "worker_threads";
 
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 

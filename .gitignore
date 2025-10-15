@@ -1,7 +1,4 @@
 utils/
-bin/main.js
-bin/bayesian-text-classifier.js
-bin/utils.js
-bin/worker.js
+bin/
 data/
 node_modules/
