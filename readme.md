@@ -55,8 +55,8 @@ const main = async () => {
     const classifier_stars = new btc.Classifier(stopwords, 2); // Using bigrams (depth 2) for stars
     const classifier_category = new btc.Classifier(stopwords);
 
-    await classifier_stars.trainDirParallel(path.join(__dirname, "../data/amazon-reviews-stars"));
-    await classifier_category.trainDirParallel(path.join(__dirname, "../data/amazon-reviews-category"));
+    await classifier_stars.trainDir(path.join(__dirname, "../data/amazon-reviews-stars"));
+    await classifier_category.trainDir(path.join(__dirname, "../data/amazon-reviews-category"));
 
     const reviews = [
         "These eyelashes do the job for the price...",
