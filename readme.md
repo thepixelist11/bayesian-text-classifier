@@ -14,6 +14,7 @@ gains on multicore systems.
 - **Naive Bayes text classification** with Laplace (add-one) smoothing
 - **Multithreaded training** for improved scalability
 - **Support for arbitrary categories** and document-based datasets
+- **Porter Stemming** for word normalization for improved feature detection
 - **Higher Order** for improved flexibility and increased accuracy for large datasets
 - **Automatic vocabulary management**
 - **Stopword filtering** from file
@@ -153,17 +154,23 @@ Returns the label corresponding to the highest score in a given score map.
 
 ---
 
-### `new Classifier(stopwords?: Set<string>, depth?: number, alpha?: number)`
+### `new Classifier(params: ClassifierConstructerParams)`
 
 Constructs a new Naive Bayesian classifier instance.
-The optional `stopwords` set is used to exclude frequent, non-informative terms.
-The optional `depth` (defaults to 1) is used to set the depth or order of the
+
+####
+
+The `stopwords` set is used to exclude frequent, non-informative terms.
+The `depth` (defaults to 1) is used to set the depth or order of the
 classifier. Higher depth's increase training time with the potential of
 increasing accuracy by allowing for multi-word contexts. Note: See [The Curse of Dimensionality](https://en.wikipedia.org/wiki/Curse_of_dimensionality).
 Experiment with different depths to see what works best for your use case.
-The optional `alpha` (defaults to 1) defines the alpha for additive Laplace
+The `alpha` (defaults to 1) defines the alpha for additive Laplace
 smoothing to smooth count data, especially for terms the classifier hasn't
 been trained on.
+The `stem` parameter (defaults to true) determines whether or not Porter
+stemming is used to normalize words by reducing them to their stems. All
+stopwords are filtered before words are stemmed.
 
 ---
 

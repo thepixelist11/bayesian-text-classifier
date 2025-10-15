@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import * as url from "url";
 import { getWords } from "./utils.js";
-import workers, { workerData } from "worker_threads";
+import workers from "worker_threads";
 
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
@@ -47,14 +47,30 @@ type ClassifierCategoryCounts = {
 }
 type LocalCategoryMap = Record<string, ClassifierCategoryCounts>;
 
+type ClassifierConstructorParams = Partial<{
+    stopwords: Set<string>;
+    depth: number;
+    alpha: number;
+    stem: boolean;
+}>;
+
 export class Classifier {
     private category_names: Set<string> = new Set();
     private categories: ClassifierCategoryMap = {};
     private total_document_count: number = 0;
     private vocabulary: Set<string> = new Set();
     public finalized: boolean = false;
+    private stopwords: Set<string> = new Set();
+    private depth: number = 1;
+    public alpha: number = 1;
+    private stem: boolean = true;
 
-    constructor(private stopwords: Set<string> = new Set(), private depth: number = 1, public alpha: number = 1.0) { };
+    constructor(params: ClassifierConstructorParams) {
+        if (params.alpha !== undefined) this.alpha = params.alpha;
+        if (params.stopwords !== undefined) this.stopwords = params.stopwords;
+        if (params.depth !== undefined) this.depth = params.depth;
+        if (params.stem !== undefined) this.stem = params.stem;
+    };
 
     private mergeLocalCounts(local: LocalCategoryMap) {
         for (const [category, local_cat] of Object.entries(local)) {
