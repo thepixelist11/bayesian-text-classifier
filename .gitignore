@@ -2,3 +2,4 @@ utils/
 bin/
 data/
 node_modules/
+test.js

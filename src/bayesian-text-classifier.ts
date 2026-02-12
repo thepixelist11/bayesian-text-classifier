@@ -196,6 +196,15 @@ export class Classifier {
         this.finalizeTraining();
     }
 
+    trainJSON(json: Record<string, string[]>) {
+        for (const [cat, docs] of Object.entries(json)) {
+            for (const doc of docs)
+                this.trainText(doc, cat);
+        }
+
+        this.finalizeTraining();
+    }
+
     classify(doc: string, output_fn?: ((val: number, val_arr: number[]) => number)) {
         if (!this.vocabulary.size || !this.total_document_count || !this.finalized) {
             throw new Error("Model not yet trained and finalized.");
